@@ -1,0 +1,93 @@
+data:
+  raw_dir: "data/raw"
+  processed_dir:
+    ml: "data/processed/ml"
+    dl: "data/processed/dl"
+  batch_size: 10
+  datasets:
+    CICIDS17:
+      enabled: true
+      files:
+        - "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv"
+        - "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv"
+        - "Friday-WorkingHours-Morning.pcap_ISCX.csv"
+        - "Monday-WorkingHours.pcap_ISCX.csv"
+        - "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv"
+        - "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv"
+        - "Tuesday-WorkingHours.pcap_ISCX.csv"
+        - "Wednesday-workingHours.pcap_ISCX.csv"
+    GLOBALIZATION-CYBERSECURITY:
+      enabled: false
+      files:
+        - "GLOBALIZATION-CYBERSECURITY-DATASET.csv"
+    ROUTESMART:
+      enabled: false
+      files:
+        - "RS-1.csv"
+        - "RS-2.csv"
+        - "RS-3.csv"
+    TON_IoT:
+      enabled: false
+      files:
+        - "train_test_network.csv"
+    UNSW-NB15:
+      enabled: false
+      files:
+        - "UNSW-NB15_1.csv"
+        - "UNSW-NB15_2.csv"
+        - "UNSW-NB15_3.csv"
+        - "UNSW-NB15_4.csv"
+
+preprocessing:
+  target_column: "Label"
+  remove_problematic_rows:
+    threshold: 1e15
+
+feature_engineering:
+  ml:
+    pca_components: 30
+  dl:
+    label_encoding: true
+
+models:
+  gpu_acceleration: true
+  ml:
+    xgboost:
+      n_estimators: 100
+      max_depth: 6
+      learning_rate: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+      objective: 'multi:softmax'
+      random_state: 0
+      early_stopping_rounds: 10
+  dl:
+    lstm_cnn:
+      lstm_units: 64
+      cnn_filters: 32
+      dense_units: 32
+      dropout_rate: 0.3
+      learning_rate: 0.001
+      batch_size: 32
+      epochs: 1
+
+training:
+  test_size: 0.2
+  random_state: 0
+
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: 'logs/iot_botnet_detection.log'
+
+output:
+  dir: "output"
+  model_dir: "models"
+  results_dir: "results"

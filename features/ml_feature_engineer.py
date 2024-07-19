@@ -1,1 +1,24 @@
-from .feature_engineer import FeatureEngineerimport pandas as pdimport numpy as npfrom sklearn.preprocessing import StandardScalerfrom sklearn.decomposition import PCAfrom tqdm import tqdmclass MLFeatureEngineer(FeatureEngineer):    def __init__(self, config, logger=None):        super().__init__(config, logger)        self.scaler = StandardScaler()        self.pca = PCA(n_components=self.config['feature_engineering']['ml']['pca_components'])    def engineer_features(self, X, y, dataset_name):        self.logger.info("Starting ML feature engineering process")                X = pd.DataFrame(X)        y = pd.Series(y)                X = self.remove_problematic_rows(X)        y = y.loc[X.index]                # Convert all columns to numeric        X = self.convert_to_numeric(X)                self.logger.info("Scaling features...")        X_scaled = self.scaler.fit_transform(X)                n_components = min(self.config['feature_engineering']['ml']['pca_components'], X_scaled.shape[1])        self.logger.info(f"Applying PCA with {n_components} components...")        self.pca = PCA(n_components=n_components, random_state=0)        X_pca = self.pca.fit_transform(X_scaled)                y_encoded = self.label_encoder.fit_transform(y)                self.logger.info(f"ML Feature engineering completed. Output shape: {X_pca.shape}")        self.logger.info(f"Explained variance ratio: {self.pca.explained_variance_ratio_.sum():.4f}")                return X_pca, y_encoded    def convert_to_numeric(self, X):        for column in X.columns:            if X[column].dtype == 'object':                X[column] = pd.factorize(X[column])[0]        return X    def remove_problematic_rows(self, X, threshold=1e15):        initial_rows = X.shape[0]                numeric_columns = X.select_dtypes(include=['int64', 'float64']).columns                X = X.dropna()        X = X[~X[numeric_columns].isin([np.inf, -np.inf]).any(axis=1)]        X = X[~(X[numeric_columns].abs() > threshold).any(axis=1)]                removed_rows = initial_rows - X.shape[0]        self.logger.info(f"Removed {removed_rows} rows with NaN, infinite or extreme values")                return X
+from .feature_engineer import FeatureEngineer
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+class MLFeatureEngineer(FeatureEngineer):
+    def __init__(self, config, logger):
+        super().__init__(config, logger)
+        self.scaler = StandardScaler()
+        self.pca = PCA(n_components=self.config['feature_engineering']['ml']['pca_components'])
+
+    def process_features(self, X):
+        self.logger.info("Processing ML features...")
+        try:
+            X_scaled = self.scaler.fit_transform(X)
+            self.logger.info(f"Shape after scaling: {X_scaled.shape}")
+            
+            X_pca = self.pca.fit_transform(X_scaled)
+            self.logger.info(f"Shape after PCA: {X_pca.shape}")
+            self.logger.info(f"Explained variance ratio: {self.pca.explained_variance_ratio_.sum():.4f}")
+            
+            return X_pca
+        except Exception as e:
+            self.logger.error(f"Error during ML feature processing: {str(e)}")
+            return None

@@ -3,6 +3,7 @@ data:
   processed_dir:
     ml: "data/processed/ml"
     dl: "data/processed/dl"
+  input_dir: "data/input"
   batch_size: 10
   datasets:
     CICIDS17:
@@ -45,7 +46,7 @@ preprocessing:
 
 feature_engineering:
   ml:
-    pca_components: 30
+    pca_components: 20
   dl:
     label_encoding: true
 

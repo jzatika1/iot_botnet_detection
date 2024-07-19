@@ -15,19 +15,19 @@ class XGBoostModel:
         self.data_split_config = config['training']
         self.gpu_acceleration = self.config['models'].get('gpu_acceleration', False)
 
-    def create_model(self):
+    def create_model(self, num_classes):
         params = self.xgb_config.copy()
         early_stopping_rounds = params.pop('early_stopping_rounds', 10)
         
         if self.gpu_acceleration:
             params['tree_method'] = 'hist'
-            params['device'] = 'cuda:0'  # use first GPU
+            params['device'] = 'cuda'
             self.logger.info("GPU acceleration is enabled for XGBoost.")
         else:
             params['tree_method'] = 'hist'
-            params['device'] = 'cpu'
             self.logger.info("Using CPU for XGBoost.")
-
+        
+        params['num_class'] = num_classes
         self.model = xgb.XGBClassifier(**params, early_stopping_rounds=early_stopping_rounds)
         self.logger.info(f"Created XGBoost model with parameters: {self.model.get_params()}")
         return self.model
@@ -39,18 +39,14 @@ class XGBoostModel:
             test_size=self.data_split_config['test_size'],
             random_state=self.data_split_config['random_state']
         )
-
         self.model.fit(
             X_train, 
             y_train, 
             eval_set=[(X_val, y_val)],
             verbose=False
         )
-
         y_pred = self.model.predict(X_val)
         y_pred_proba = self.model.predict_proba(X_val)
-
-        # Evaluate using ModelEvaluator
         evaluate_model(y_val, y_pred, "XGBoost", self.config, self.logger, y_pred_proba)
         
         return self
@@ -59,11 +55,19 @@ class XGBoostModel:
         if self.model is None:
             raise ValueError("Model has not been trained. Call train() first.")
         
-        if self.gpu_acceleration:
-            dmatrix = xgb.DMatrix(X)
-            return self.model.predict(dmatrix)
-        else:
-            return self.model.predict(X)
+        self.logger.info(f"Predicting with input type: {type(X)}")
+        self.logger.info(f"Input shape: {X.shape}")
+        
+        try:
+            if self.gpu_acceleration:
+                self.logger.info("Using GPU for prediction")
+                return self.model.predict(X, output_margin=True)
+            else:
+                self.logger.info("Using CPU for prediction")
+                return self.model.predict(X)
+        except Exception as e:
+            self.logger.error(f"Error during prediction: {str(e)}")
+            raise
 
     def save_model(self, filepath):
         if self.model is None:
@@ -75,13 +79,15 @@ class XGBoostModel:
     def load_model(self, filepath):
         self.model = joblib.load(filepath)
         self.logger.info(f"Model loaded from {filepath}")
+        self.logger.info(f"Loaded model parameters: {self.model.get_params()}")
 
-def create_xgboost_model(config, logger=None):
+def create_xgboost_model(config, logger=None, num_classes=None):
     model = XGBoostModel(config, logger)
-    model.create_model()
+    if num_classes is not None:
+        model.create_model(num_classes)
     return model
 
-def train_xgboost_model(model, X, y):
-    num_classes = len(np.unique(y))
-    model.model.set_params(num_class=num_classes)
+def train_xgboost_model(model, X, y, num_classes):
+    if model.model is None:
+        model.create_model(num_classes)
     return model.train(X, y)

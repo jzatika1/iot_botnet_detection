@@ -16,6 +16,7 @@ class LSTMCNNModel:
         self.dl_config = config['models']['dl']['lstm_cnn']
         self.data_split_config = config['training']
         self.gpu_acceleration = self.config['models'].get('gpu_acceleration', True)
+        self.num_classes = None
 
         if self.gpu_acceleration:
             physical_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -32,6 +33,7 @@ class LSTMCNNModel:
                 self.gpu_acceleration = False
 
     def create_model(self, input_shape, num_classes):
+        self.num_classes = num_classes
         device = '/gpu:0' if self.gpu_acceleration else '/cpu:0'
         with tf.device(device):
             self.model = Sequential([
@@ -51,7 +53,7 @@ class LSTMCNNModel:
                 metrics=['accuracy']
             )
         
-        self.logger.info(f"Created LSTM-CNN model with input shape: {input_shape}")
+        self.logger.info(f"Created LSTM-CNN model with input shape: {input_shape}, num_classes: {num_classes}")
         self.model.summary(print_fn=self.logger.info)
 
     def train(self, X, y):
@@ -94,12 +96,6 @@ class LSTMCNNModel:
         return np.argmax(self.model.predict(X), axis=-1)
 
     def save_model(self, filepath):
-        """
-        Save the trained model to a file.
-
-        Args:
-            filepath (str): Path to save the model
-        """
         if self.model is None:
             raise ValueError("No model to save. Train the model first.")
         
@@ -111,18 +107,16 @@ class LSTMCNNModel:
         self.logger.info(f"Model saved to {filepath}")
 
     def load_model(self, filepath):
-        """
-        Load a trained model from a file.
-
-        Args:
-            filepath (str): Path to the saved model
-        """
         # Ensure the file has the .keras extension
         if not filepath.endswith('.keras'):
             filepath = os.path.splitext(filepath)[0] + '.keras'
         
         self.model = tf.keras.models.load_model(filepath)
         self.logger.info(f"Model loaded from {filepath}")
+        
+        # Infer num_classes from the loaded model
+        self.num_classes = self.model.layers[-1].output_shape[-1]
+        self.logger.info(f"Loaded model has {self.num_classes} classes")
 
 def create_lstm_cnn_model(config, input_shape, num_classes, logger=None):
     model = LSTMCNNModel(config, logger)
@@ -130,17 +124,6 @@ def create_lstm_cnn_model(config, input_shape, num_classes, logger=None):
     return model
 
 def train_lstm_cnn_model(model, X, y):
-    """
-    Train an LSTMCNNModel instance.
-
-    Args:
-        model (LSTMCNNModel): The model to train
-        X (np.array): Input features
-        y (np.array): Target labels
-
-    Returns:
-        LSTMCNNModel: The trained model instance
-    """
     # Ensure X is reshaped to 3D (samples, timesteps, features)
     if len(X.shape) == 2:
         X = X.reshape((X.shape[0], X.shape[1], 1))

@@ -114,7 +114,7 @@ class ModelEvaluator:
             auc_roc['macro_avg'] = macro_auc_roc
             return auc_roc
 
-def evaluate_model(y_true, y_pred, model_name, config, logger=None, y_pred_proba=None):
+def evaluate_model(y_true, y_pred, model_name, config, logger, y_pred_proba=None):
     """
     Wrapper function to evaluate a model's performance.
 
@@ -123,11 +123,26 @@ def evaluate_model(y_true, y_pred, model_name, config, logger=None, y_pred_proba
         y_pred (np.array): Predicted labels
         model_name (str): Name of the model being evaluated
         config (dict): Configuration dictionary
-        logger (Logger, optional): Logger instance
+        logger (Logger): Logger instance
         y_pred_proba (np.array, optional): Predicted probabilities for AUC-ROC calculation
 
     Returns:
         dict: A dictionary containing the evaluation metrics
     """
+    logger.info("Starting model evaluation")
+    
+    # Ensure y_true and y_pred are numpy arrays
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    
+    # Ensure y_true and y_pred are integer types
+    y_true = y_true.astype(int)
+    y_pred = y_pred.astype(int)
+    
+    logger.info(f"y_true shape: {y_true.shape}, dtype: {y_true.dtype}")
+    logger.info(f"y_pred shape: {y_pred.shape}, dtype: {y_pred.dtype}")
+    logger.info(f"Unique values in y_true: {np.unique(y_true)}")
+    logger.info(f"Unique values in y_pred: {np.unique(y_pred)}")
+    
     evaluator = ModelEvaluator(config, logger)
     return evaluator.evaluate_model(y_true, y_pred, model_name, y_pred_proba)

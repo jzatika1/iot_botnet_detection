@@ -131,9 +131,6 @@ data/processed/
 data/raw/
 
 # Ignore model files
-models/*.h5
-models/*.keras
-models/*.joblib
 models/__pycache__/
 
 # Ignore output files

@@ -2,6 +2,18 @@
 
 IoT Botnet Detection System using Machine Learning (ML) and Deep Learning (DL) models.
 
+## Classification Considerations & Limitations
+
+When training the model on a dataset or datasets, it is crucial to ensure that the features and labels of the input data match those used during training. This is important for accurate classification results.
+
+Using Principal Component Analysis (PCA) is a great approach for dimensionality reduction and feature selection. However, further care must be taken to ensure that the features selected by PCA align with the features that will be available in real-time for classification. This involves:
+
+1. **Feature Matching**: Ensuring that the input features used for real-time classification are the same as those used to train the model. Any discrepancy in the feature set can lead to incorrect classifications.
+
+2. **Label Matching**: Ensuring that the labels used for classification are consistent with those used during model training. Inconsistent labels can result in misclassification or model errors.
+
+3. **Real-Time Access**: Verifying that the features selected by PCA or any other feature selection method are readily available and can be accessed in real-time. This ensures that the model can be effectively deployed in a live environment.
+
 ## Performance Metrics
 
 ### Machine Learning (ML) Model:

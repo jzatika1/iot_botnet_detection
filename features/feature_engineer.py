@@ -2,22 +2,23 @@ import numpy as np
 import pandas as pd
 import os
 import json
+import joblib
 from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 
 class FeatureEngineer:
-    def __init__(self, config, logger):
+    def __init__(self, config, logger, data_loader):
         self.config = config
         self.logger = logger
+        self.data_loader = data_loader
         self.label_encoder = LabelEncoder()
         self.numeric_imputer = SimpleImputer(strategy='mean')
         self.categorical_imputer = SimpleImputer(strategy='most_frequent')
         self.label_mapping = None
+        self.feature_engineering_metadata = {}
 
     def engineer_features(self, X, y, dataset_name):
         self.logger.info(f"Starting feature engineering process for {dataset_name}")
-        
-        print(y)
         
         X, y = self.preprocess_data(X, y)
         if X is None or y is None:
@@ -40,7 +41,7 @@ class FeatureEngineer:
             return X_imputed, y
         
         y_encoded = self.encode_labels(y)
-
+    
         if y_encoded is None:
             self.logger.warning("Label encoding returned None. Returning processed features and original labels.")
             return X_processed, y
@@ -48,55 +49,19 @@ class FeatureEngineer:
         self.logger.info(f"Feature engineering completed. Output shape: {X_processed.shape}")
         return X_processed, y_encoded
 
-    def remove_problematic_rows(self, X, y, threshold=1e15):
-        initial_rows = X.shape[0]
-        numeric_columns = X.select_dtypes(include=['int64', 'float64']).columns
-        
-        # Create a single mask for all problematic rows
-        problematic_mask = (
-            X.isna().any(axis=1) |  # NaN values
-            X[numeric_columns].isin([np.inf, -np.inf]).any(axis=1) |  # Infinite values
-            (X[numeric_columns].abs() > threshold).any(axis=1)  # Extreme values
-        )
-        
-        # Remove problematic rows
-        X_clean = X[~problematic_mask].copy()
-        y_clean = y[~problematic_mask].copy()
-        
-        removed_rows = initial_rows - X_clean.shape[0]
-        nan_removed = X.isna().any(axis=1).sum()
-        inf_removed = X[numeric_columns].isin([np.inf, -np.inf]).any(axis=1).sum()
-        extreme_removed = ((X[numeric_columns].abs() > threshold).any(axis=1) & ~X[numeric_columns].isin([np.inf, -np.inf]).any(axis=1)).sum()
-        
-        self.logger.info(f"Removed {removed_rows} problematic rows:")
-        self.logger.info(f"  - Rows with NaN values: {nan_removed}")
-        self.logger.info(f"  - Rows with infinite values: {inf_removed}")
-        self.logger.info(f"  - Rows with extreme values: {extreme_removed}")
-        
-        return X_clean, y_clean
-
     def preprocess_data(self, X, y):
         self.logger.info("Starting data preprocessing")
         
         X = pd.DataFrame(X)
         y = pd.Series(y)
         
-        self.log_data_info(X)
-        
-        print(y)
-        
-        # Remove problematic rows
-        X_clean, y_clean = self.remove_problematic_rows(X, y)
-        
         # Convert to numeric
-        X_numeric = self.convert_to_numeric(X_clean)
+        X_numeric = self.convert_to_numeric(X)
         
-        self.logger.info(f"Preprocessing completed. Output shapes: X: {X_numeric.shape}, y: {y_clean.shape}")
+        if X_numeric.shape[0] != y.shape[0]:
+            self.logger.error(f"Mismatch in number of rows: X has {X_numeric.shape[0]}, y has {y.shape[0]}")
         
-        if X_numeric.shape[0] != y_clean.shape[0]:
-            self.logger.error(f"Mismatch in number of rows: X has {X_numeric.shape[0]}, y has {y_clean.shape[0]}")
-        
-        return X_numeric, y_clean
+        return X_numeric, y
 
     def convert_to_numeric(self, X):
         for column in X.select_dtypes(include=['object']):
@@ -124,7 +89,28 @@ class FeatureEngineer:
             return None
 
     def process_features(self, X):
-        raise NotImplementedError("Subclasses must implement process_features method")
+        self.logger.info("Processing ML features...")
+        try:
+            original_columns = X.columns.tolist()
+            X_scaled = self.scaler.fit_transform(X)
+            X_pca = self.pca.fit_transform(X_scaled)
+            explained_variance = self.pca.explained_variance_ratio_.sum()
+            
+            self.logger.info(f"PCA applied: reduced from {X_scaled.shape[1]} to {X_pca.shape[1]} features, explaining {explained_variance:.2%} of variance")
+            
+            # Generate new feature names after PCA
+            self.selected_features = [f'pca_component_{i}' for i in range(X_pca.shape[1])]
+            
+            # Save feature engineering metadata
+            self.feature_engineering_metadata['scaler'] = self.scaler
+            self.feature_engineering_metadata['pca'] = self.pca
+            self.feature_engineering_metadata['original_columns'] = original_columns
+            self.feature_engineering_metadata['selected_features'] = self.selected_features
+            
+            return X_pca
+        except Exception as e:
+            self.logger.error(f"Error during ML feature processing: {str(e)}")
+            return None
 
     def encode_labels(self, y):
         try:
@@ -136,57 +122,67 @@ class FeatureEngineer:
             self.logger.error(f"Error during label encoding: {str(e)}")
             return None
 
-    def log_data_info(self, X):
-        self.logger.info(f"Shape of data: {X.shape}")
-        nan_counts = X.isna().sum()
-        self.logger.info(f"Total NaN values: {nan_counts.sum()}")
-        self.logger.info("NaN values per column:")
-        for column, count in nan_counts[nan_counts > 0].items():
-            self.logger.info(f"  {column}: {count} ({count/len(X):.2%})")
-        self.logger.info(f"Infinite values in X: {np.isinf(X.select_dtypes(include=np.number)).sum().sum()}")
-
     def save_processed_data(self, features, labels, output_dir, prefix):
         os.makedirs(output_dir, exist_ok=True)
         features_path = os.path.join(output_dir, f'{prefix}_features.npy')
         labels_path = os.path.join(output_dir, f'{prefix}_labels.npy')
         metadata_path = os.path.join(output_dir, f'{prefix}_metadata.json')
-
+        fe_metadata_path = os.path.join(output_dir, f'{prefix}_fe_metadata.joblib')
+    
         np.save(features_path, features)
         np.save(labels_path, labels)
-
-        # Save metadata including number of classes and label mapping
+    
+        # Save metadata including number of classes, label mapping, and feature engineering metadata
         metadata = {
             "num_classes": len(np.unique(labels)),
             "feature_shape": features.shape,
             "label_mapping": self.label_mapping
         }
+    
+        # Add model-specific feature information
+        if hasattr(self, 'pca_features'):
+            metadata["original_features"] = self.original_features
+            metadata["pca_features"] = self.pca_features
+            metadata["pca_to_original_mapping"] = self.pca_to_original_mapping
+        else:
+            metadata["selected_features"] = self.selected_features
+    
         with open(metadata_path, 'w') as f:
-            json.dump(metadata, f)
-
-        self.logger.info(f"Processed data saved to {output_dir}")
+            json.dump(metadata, f, indent=2)
+    
+        # Save feature engineering metadata
+        joblib.dump(self.feature_engineering_metadata, fe_metadata_path)
+    
         self.logger.info(f"Features shape: {features.shape}, Labels shape: {labels.shape}")
-        self.logger.info(f"Number of classes: {metadata['num_classes']}")
-        self.logger.info(f"Label mapping saved to metadata file")
-
+        self.logger.info(f"Label mapping and feature engineering metadata saved")
+        
     def load_processed_data(self, input_dir, prefix):
         features_path = os.path.join(input_dir, f'{prefix}_features.npy')
         labels_path = os.path.join(input_dir, f'{prefix}_labels.npy')
         metadata_path = os.path.join(input_dir, f'{prefix}_metadata.json')
-
+        fe_metadata_path = os.path.join(input_dir, f'{prefix}_fe_metadata.joblib')
+    
         features = np.load(features_path)
         labels = np.load(labels_path)
-
+    
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
-
+    
         self.label_mapping = metadata.get("label_mapping")
-
-        self.logger.info(f"Processed data loaded from {input_dir}")
-        self.logger.info(f"Features shape: {features.shape}, Labels shape: {labels.shape}")
+    
+        # Load feature engineering metadata
+        self.feature_engineering_metadata = joblib.load(fe_metadata_path)
+    
+        # Load PCA-specific information if it exists
+        self.original_features = metadata.get("original_features")
+        self.pca_features = metadata.get("pca_features")
+        self.pca_to_original_mapping = metadata.get("pca_to_original_mapping")
+    
+        self.logger.info(f"Processed data loaded from {input_dir}. Features shape: {features.shape}, Labels shape: {labels.shape}")
         self.logger.info(f"Number of classes: {metadata['num_classes']}")
-        if self.label_mapping:
-            self.logger.info(f"Label mapping loaded: {self.label_mapping}")
-        else:
-            self.logger.warning("No label mapping found in metadata")
-
+        self.logger.info("Label mapping and feature engineering metadata loaded")
+    
+        if self.pca_to_original_mapping:
+            self.logger.info("PCA to original feature mapping loaded")
+        
         return features, labels, metadata

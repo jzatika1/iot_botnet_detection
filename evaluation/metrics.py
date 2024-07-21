@@ -40,10 +40,10 @@ class ModelEvaluator:
                 results['precision'] = precision_score(y_true, y_pred, average='macro')
             elif metric == 'recall':
                 results['recall'] = recall_score(y_true, y_pred, average='macro')
-            elif metric == 'f1_score':
+            elif metric == 'f1':
                 precision = precision_score(y_true, y_pred, average='macro')
                 recall = recall_score(y_true, y_pred, average='macro')
-                results['f1_score'] = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
+                results['f1'] = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
             elif metric == 'confusion_matrix':
                 results['confusion_matrix'] = confusion_matrix(y_true, y_pred)
             elif metric == 'auc_roc' and y_pred_proba is not None:
@@ -78,7 +78,7 @@ class ModelEvaluator:
             f1_scores.append(f1)
 
         for label, p, r, f in zip(labels, precision, recall, f1_scores):
-            self.logger.info(f"Class {label} - Precision: {p:.4f}, Recall: {r:.4f}, F1-score: {f:.4f}")
+            self.logger.info(f"Class {label} - Precision: {p:.4f}, Recall: {r:.4f}, F1: {f:.4f}")
 
     def calculate_auc_roc(self, y_true, y_pred_proba):
         """

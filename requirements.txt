@@ -1,9 +1,0 @@
-pandas
-numpy
-scikit-learn
-xgboost
-tensorflow
-matplotlib
-seaborn
-pyyaml
-python-dotenv

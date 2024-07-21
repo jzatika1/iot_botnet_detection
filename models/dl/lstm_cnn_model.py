@@ -115,7 +115,11 @@ class LSTMCNNModel:
         self.logger.info(f"Model loaded from {filepath}")
         
         # Infer num_classes from the loaded model
-        self.num_classes = self.model.layers[-1].output_shape[-1]
+        last_layer = self.model.layers[-1]
+        if isinstance(last_layer, tf.keras.layers.Dense):
+            self.num_classes = last_layer.units
+        else:
+            self.num_classes = last_layer.output_shape[-1]
         self.logger.info(f"Loaded model has {self.num_classes} classes")
 
 def create_lstm_cnn_model(config, input_shape, num_classes, logger=None):

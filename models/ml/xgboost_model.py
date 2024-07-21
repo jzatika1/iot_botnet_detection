@@ -61,7 +61,8 @@ class XGBoostModel:
         try:
             if self.gpu_acceleration:
                 self.logger.info("Using GPU for prediction")
-                return self.model.predict(X, output_margin=True)
+                probabilities = self.model.predict_proba(X)
+                return np.argmax(probabilities, axis=1)
             else:
                 self.logger.info("Using CPU for prediction")
                 return self.model.predict(X)

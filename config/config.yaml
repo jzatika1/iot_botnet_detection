@@ -39,16 +39,11 @@ data:
         - "UNSW-NB15_3.csv"
         - "UNSW-NB15_4.csv"
 
-preprocessing:
-  target_column: "Label"
-  remove_problematic_rows:
-    threshold: 1e15
-
 feature_engineering:
   ml:
     pca_components: 20
   dl:
-    label_encoding: true
+    # Should not need anything here...
 
 models:
   gpu_acceleration: true
@@ -81,14 +76,13 @@ evaluation:
     - accuracy
     - precision
     - recall
-    - f1_score
+    - f1
 
+output:
+  model_dir: "models"
+  results_dir: "results"
+  
 logging:
   level: INFO
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
   file: 'logs/iot_botnet_detection.log'
-
-output:
-  dir: "output"
-  model_dir: "models"
-  results_dir: "results"
